@@ -10,7 +10,7 @@ An intensive and visual testing tool for the **42 Push_swap** project. This scri
 
 ## 📸 Preview
 
-![image](Screenshot from 2026-01-21 14-33-09.png "Screenshot")
+![image](Screenshot01.png "Screenshot")
 
 ---
 
