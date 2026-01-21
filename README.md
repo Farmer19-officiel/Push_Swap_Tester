@@ -26,6 +26,7 @@ Donnez les droits d'exécution et lancez le benchmark :
 ```bash
 chmod +x benchmark.sh
 ./benchmark.sh
+```
 
 ---
 
