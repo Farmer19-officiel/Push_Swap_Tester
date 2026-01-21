@@ -62,3 +62,4 @@ OUT=$(timeout "$TIMEOUT" ./push_swap $ARGS "$flag" 2>/dev/null)
 - **TIMEOUT** : Execution time exceeded 10 seconds.
 - **SCORE** : Success percentage (must be 100% to validate the project).
 
+*Générate by Gemini 3 Flash*
