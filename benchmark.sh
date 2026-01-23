@@ -20,7 +20,7 @@ G='\033[0;32m'; R='\033[0;31m'; Y='\033[1;33m'; B='\033[0;34m'; P='\033[0;35m'; 
 header() {
     clear
     echo -e "${C}╔══════════════════════════════════════════════════════════════════════════╗${NC}"
-    echo -e "${C}║                     ${NC}${Y}PUSH_SWAP DEBUG & STRESS TESTER${NC}${C}                ║${NC}"
+    echo -e "${C}║                        ${NC}${Y}PUSH_SWAP DEBUG & STRESS TESTER${NC}${C}                   ║${NC}"
     echo -e "${C}╚══════════════════════════════════════════════════════════════════════════╝${NC}"
     echo -e "  ${P}Trials:${NC} $TRIALS/category | ${P}Timeout:${NC} $TIMEOUT"
     if [ "$SAVE_LOG" = true ]; then echo -e "  ${Y}Logging enabled (Critical Only):${NC} $LOG_FILE"; fi
