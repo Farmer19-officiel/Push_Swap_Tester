@@ -7,6 +7,7 @@ TRIALS=100
 TIMEOUT=10s
 SAVE_LOG=false
 LOG_FILE="debug_oversize.log"
+BINARY="push_swap"
 
 # Check for -save flag
 if [[ "$1" == "-save" ]]; then
@@ -16,6 +17,31 @@ fi
 
 # UI Colors
 G='\033[0;32m'; R='\033[0;31m'; Y='\033[1;33m'; B='\033[0;34m'; P='\033[0;35m'; C='\033[0;36m'; NC='\033[0m'; DIM='\033[2m'
+
+# --- PHASE DE COMPILATION ---
+echo -e "${C}# Compiling project...${NC}"
+
+if [ -f "Makefile" ]; then
+    make > /dev/null 2>&1
+    # On vérifie l'exécutable généré par le Makefile
+    if [ ! -f "$BINARY" ] && [ -f "a.out" ]; then BINARY="a.out"; fi
+else
+    # Compilation robuste : cherche tous les .c dans le dossier actuel et sous-dossiers
+    SOURCES=$(find . -name "*.c")
+    if [ -z "$SOURCES" ]; then
+        echo -e "${R}Error: No .c files found.${NC}"
+        exit 1
+    fi
+    cc -Wall -Wextra -Werror $SOURCES -o a.out > /dev/null 2>&1
+    BINARY="a.out"
+fi
+
+# Vérification finale de l'exécutable
+if [ ! -f "$BINARY" ]; then
+    echo -e "${R}Error: Compilation failed. Ensure your .c files are valid.${NC}"
+    exit 1
+fi
+echo -e "${G}# Compilation successful: using $BINARY${NC}\n"
 
 header() {
     clear
@@ -56,7 +82,7 @@ for flag in "${FLAGS[@]}"; do
 
             ARGS=$(python3 -c "import random; l=sorted(random.sample(range(-20000, 20000), $size)); n=int($size*$dis); idx=random.sample(range($size), n); v=[l[i] for i in idx]; random.shuffle(v); res=l[:]; [res.__setitem__(idx[i], v[i]) for i in range(n)]; print(*(res))")
 
-            RAW_OUT=$(timeout "$TIMEOUT" ./a.out $ARGS "$flag" 2>/dev/null)
+            RAW_OUT=$(timeout "$TIMEOUT" ./"$BINARY" $ARGS "$flag" 2>/dev/null)
             EXIT_STATUS=$?
 
             if [ $EXIT_STATUS -eq 124 ]; then
@@ -68,7 +94,6 @@ for flag in "${FLAGS[@]}"; do
                     ((ok++))
                     count=$(echo "$RAW_OUT" | sed '/^\s*$/d' | wc -l | tr -d ' ')
 
-                    # LOGGING ONLY FOR CRITICAL OVERSIZE (FAIL)
                     if [ "$SAVE_LOG" = true ]; then
                         if ([ "$size" -eq 100 ] && [ "$count" -ge 2000 ]) || ([ "$size" -eq 500 ] && [ "$count" -ge 12000 ]); then
                             echo -e "[CRITICAL] Ops: $count | Flag: $flag | Size: $size\nStack: $ARGS\n" >> "$LOG_FILE"
@@ -107,7 +132,6 @@ echo -e "${C}├────────────┼─────┼──�
 
 while IFS='|' read -r f s n_ok n_ko n_to rate max_l avg_l; do
     color_rate=$G; [ "$rate" -lt 100 ] && color_rate=$R
-
     get_color() {
         local val=$1; local sz=$2
         if [ "$sz" -eq 100 ]; then
@@ -116,7 +140,6 @@ while IFS='|' read -r f s n_ok n_ko n_to rate max_l avg_l; do
             if [ "$val" -ge 12000 ]; then echo "$R"; elif [ "$val" -ge 5500 ]; then echo "$Y"; else echo "$G"; fi
         fi
     }
-
     c_max=$(get_color "$max_l" "$s")
     c_avg=$(get_color "$avg_l" "$s")
     c_ko=$NC; [ "$n_ko" -gt 0 ] && c_ko=$R
@@ -134,6 +157,12 @@ else
     echo -e "\n${R}>>>> FINAL VERDICT: FAIL${NC} ❌"
 fi
 
-if [ "$SAVE_LOG" = true ]; then echo -e "${Y}Critical failures logged to: ${NC}$LOG_FILE"; fi
-
+# --- NETTOYAGE ---
+if [ -f "Makefile" ]; then
+    make fclean > /dev/null 2>&1
+else
+    rm -f a.out
+fi
 rm -f "$SUMMARY_FILE"
+
+if [ "$SAVE_LOG" = true ]; then echo -e "${Y}Critical failures logged to: ${NC}$LOG_FILE"; fi
