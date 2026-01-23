@@ -122,7 +122,7 @@ while IFS='|' read -r f s n_ok n_ko n_to rate max_l avg_l; do
     c_ko=$NC; [ "$n_ko" -gt 0 ] && c_ko=$R
     c_to=$NC; [ "$n_to" -gt 0 ] && c_to=$R
 
-    printf "${C}│${NC} %-10s ${C}│${NC} %-3s ${C}│${NC} %-4s ${C}│${NC} ${c_ko}%-4s${NC} ${C}│${NC} ${c_to}%-3s${NC} ${C}│${NC} ${color_rate}%6s%%${NC} ${C}│${NC} ${c_max}%-8s${NC} ${C}│${NC} ${c_avg}%-8s${NC} ${C}│${NC}\n" \
+    printf "${C}│${NC} %-10s ${C}│${NC} %-3s ${C}│${NC} %-4s ${C}│${NC} ${c_ko}%-4s${NC} ${C}│${NC} ${c_to}%-3s${NC} ${C}│${NC} ${color_rate}%5s%%${NC} ${C}│${NC} ${c_max}%-8s${NC} ${C}│${NC} ${c_avg}%-8s${NC} ${C}│${NC}\n" \
            "$f" "$s" "$n_ok" "$n_ko" "$n_to" "$rate" "$max_l" "$avg_l"
 done < "$SUMMARY_FILE"
 
