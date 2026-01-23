@@ -1,20 +1,31 @@
 #!/bin/bash
 
+# Configuration
 FLAGS=("--simple" "--medium" "--complex" "--adaptive")
 SIZES=(100 500)
 TRIALS=100
 TIMEOUT=10s
+SAVE_LOG=false
+LOG_FILE="debug_oversize.log"
+
+# Check for -save flag
+if [[ "$1" == "-save" ]]; then
+    SAVE_LOG=true
+    echo -n "" > "$LOG_FILE"
+fi
 
 # UI Colors
-G='\033[0;32m'; R='\033[0;31m'; Y='\033[1;33m'; B='\033[0;34m'; P='\033[0;35m'; C='\033[0;36m'; NC='\033[0m'
+G='\033[0;32m'; R='\033[0;31m'; Y='\033[1;33m'; B='\033[0;34m'; P='\033[0;35m'; C='\033[0;36m'; NC='\033[0m'; DIM='\033[2m'
 
 header() {
     clear
-    echo -e "${C}╔══════════════════════════════════════════════════════════════════╗${NC}"
-    echo -e "${C}║                     ${NC}${Y}PUSH_SWAP STRESS TESTER${NC}${C}                      ║${NC}"
-    echo -e "${C}╚══════════════════════════════════════════════════════════════════╝${NC}"
+    echo -e "${C}╔══════════════════════════════════════════════════════════════════════════╗${NC}"
+    echo -e "${C}║                     ${NC}${Y}PUSH_SWAP DEBUG & STRESS TESTER${NC}${C}                ║${NC}"
+    echo -e "${C}╚══════════════════════════════════════════════════════════════════════════╝${NC}"
     echo -e "  ${P}Trials:${NC} $TRIALS/category | ${P}Timeout:${NC} $TIMEOUT"
-    echo -e "--------------------------------------------------------------------"
+    if [ "$SAVE_LOG" = true ]; then echo -e "  ${Y}Logging enabled (Critical Only):${NC} $LOG_FILE"; fi
+    echo -e "  ${DIM}Thresholds: ${G}Perfect (<700/5500)${NC} ${DIM}|${NC} ${Y}Valid (<2000/12000)${NC} ${DIM}|${NC} ${R}Fail${NC}"
+    echo -e "${DIM}----------------------------------------------------------------------------${NC}"
 }
 
 SUMMARY_FILE=".stats.tmp"
@@ -25,7 +36,7 @@ header
 
 for flag in "${FLAGS[@]}"; do
     for size in "${SIZES[@]}"; do
-        ok=0; ko=0; to=0
+        ok=0; ko=0; to=0; total_lines=0; max_lines=0
 
         case "$flag" in
             "--simple") d_fixed="0.2" ;;
@@ -43,21 +54,32 @@ for flag in "${FLAGS[@]}"; do
                 dis="$d_fixed"
             fi
 
-            # Args Generation (Push_Swap compatible)
-            ARGS=$(python3 -c "import random; l=sorted(random.sample(range(-10000, 10000), $size)); n=int($size*$dis); idx=random.sample(range($size), n); v=[l[i] for i in idx]; random.shuffle(v); res=l[:]; [res.__setitem__(idx[i], v[i]) for i in range(n)]; print(*(res))")
+            ARGS=$(python3 -c "import random; l=sorted(random.sample(range(-20000, 20000), $size)); n=int($size*$dis); idx=random.sample(range($size), n); v=[l[i] for i in idx]; random.shuffle(v); res=l[:]; [res.__setitem__(idx[i], v[i]) for i in range(n)]; print(*(res))")
 
-            # Execution
-            OUT=$(timeout "$TIMEOUT" ./a.out $ARGS "$flag" 2>/dev/null)
+            RAW_OUT=$(timeout "$TIMEOUT" ./a.out $ARGS "$flag" 2>/dev/null)
             EXIT_STATUS=$?
 
             if [ $EXIT_STATUS -eq 124 ]; then
                 ((to++)); GLOBAL_PASS=false
+                if [ "$SAVE_LOG" = true ]; then echo -e "[TIMEOUT] Flag: $flag | Size: $size\nStack: $ARGS\n" >> "$LOG_FILE"; fi
             else
-                CHECK_RES=$(echo "$OUT" | ./checker_linux $ARGS 2>&1)
+                CHECK_RES=$(echo "$RAW_OUT" | ./checker_linux $ARGS 2>&1)
                 if [[ "$CHECK_RES" == "OK" ]]; then
                     ((ok++))
+                    count=$(echo "$RAW_OUT" | sed '/^\s*$/d' | wc -l | tr -d ' ')
+
+                    # LOGGING ONLY FOR CRITICAL OVERSIZE (FAIL)
+                    if [ "$SAVE_LOG" = true ]; then
+                        if ([ "$size" -eq 100 ] && [ "$count" -ge 2000 ]) || ([ "$size" -eq 500 ] && [ "$count" -ge 12000 ]); then
+                            echo -e "[CRITICAL] Ops: $count | Flag: $flag | Size: $size\nStack: $ARGS\n" >> "$LOG_FILE"
+                        fi
+                    fi
+
+                    total_lines=$((total_lines + count))
+                    [ "$count" -gt "$max_lines" ] && max_lines=$count
                 else
                     ((ko++)); GLOBAL_PASS=false
+                    if [ "$SAVE_LOG" = true ]; then echo -e "[KO] Flag: $flag | Size: $size\nStack: $ARGS\n" >> "$LOG_FILE"; fi
                 fi
             fi
 
@@ -66,35 +88,52 @@ for flag in "${FLAGS[@]}"; do
             fi
         done
 
-        # Calculate Success Rate %
+        if [ "$size" -eq 100 ] && [ "$max_lines" -ge 2000 ]; then GLOBAL_PASS=false; fi
+        if [ "$size" -eq 500 ] && [ "$max_lines" -ge 12000 ]; then GLOBAL_PASS=false; fi
+
         success_rate=$(( (ok * 100) / TRIALS ))
-        echo "$flag|$size|$ok|$ko|$to|$success_rate" >> "$SUMMARY_FILE"
+        avg_lines=0
+        [ $ok -gt 0 ] && avg_lines=$((total_lines / ok))
+
+        echo "$flag|$size|$ok|$ko|$to|$success_rate|$max_lines|$avg_lines" >> "$SUMMARY_FILE"
         echo -e " - ${G}DONE${NC}"
     done
 done
 
 # --- FINAL TABLE ---
-echo -e "\n${C}┌──────────────┬──────┬────────────┬────────────┬────────────┬─────────┐${NC}"
-echo -e "${C}│${NC} ${Y}CATEGORY${NC}     ${C}│${NC} ${Y}SIZE${NC} ${C}│${NC}     ${G}OK${NC}     ${C}│${NC}     ${R}KO${NC}     ${C}│${NC}   ${P}T/O${NC}      ${C}│${NC} ${B}SCORE${NC}   ${C}│${NC}"
-echo -e "${C}├──────────────┼──────┼────────────┼────────────┼────────────┼─────────┤${NC}"
+echo -e "\n${C}┌────────────┬─────┬──────┬──────┬─────┬────────┬──────────┬──────────┐${NC}"
+echo -e "${C}│${NC} ${Y}CATEGORY${NC}   ${C}│${NC} ${Y}SIZE${NC}${C}│${NC}  ${G}OK${NC}  ${C}│${NC}  ${R}KO${NC}  ${C}│${NC} ${P}T/O${NC} ${C}│${NC} ${B}SCORE${NC}  ${C}│${NC} ${C}MAX LINE${NC} ${C}│${NC} ${C}AVG LINE${NC} ${C}│${NC}"
+echo -e "${C}├────────────┼─────┼──────┼──────┼─────┼────────┼──────────┼──────────┤${NC}"
 
-while IFS='|' read -r f s n_ok n_ko n_to rate; do
-    # Column Colors
-    color_rate=$G; [ "$rate" -lt 100 ] && color_rate=$Y; [ "$rate" -lt 50 ] && color_rate=$R
-    color_ko=$NC; [ "$n_ko" -gt 0 ] && color_ko=$R
-    color_to=$NC; [ "$n_to" -gt 0 ] && color_to=$R
+while IFS='|' read -r f s n_ok n_ko n_to rate max_l avg_l; do
+    color_rate=$G; [ "$rate" -lt 100 ] && color_rate=$R
 
-    printf "${C}│${NC} %-12s ${C}│${NC} %-4s ${C}│${NC} ${G}%-10s${NC} ${C}│${NC} ${color_ko}%-10s${NC} ${C}│${NC} ${color_to}%-10s${NC} ${C}│${NC} ${color_rate}%5s%%${NC}  ${C}│${NC}\n" \
-           "$f" "$s" "$n_ok" "$n_ko" "$n_to" "$rate"
+    get_color() {
+        local val=$1; local sz=$2
+        if [ "$sz" -eq 100 ]; then
+            if [ "$val" -ge 2000 ]; then echo "$R"; elif [ "$val" -ge 700 ]; then echo "$Y"; else echo "$G"; fi
+        else
+            if [ "$val" -ge 12000 ]; then echo "$R"; elif [ "$val" -ge 5500 ]; then echo "$Y"; else echo "$G"; fi
+        fi
+    }
+
+    c_max=$(get_color "$max_l" "$s")
+    c_avg=$(get_color "$avg_l" "$s")
+    c_ko=$NC; [ "$n_ko" -gt 0 ] && c_ko=$R
+    c_to=$NC; [ "$n_to" -gt 0 ] && c_to=$R
+
+    printf "${C}│${NC} %-10s ${C}│${NC} %-3s ${C}│${NC} %-4s ${C}│${NC} ${c_ko}%-4s${NC} ${C}│${NC} ${c_to}%-3s${NC} ${C}│${NC} ${color_rate}%6s%%${NC} ${C}│${NC} ${c_max}%-8s${NC} ${C}│${NC} ${c_avg}%-8s${NC} ${C}│${NC}\n" \
+           "$f" "$s" "$n_ok" "$n_ko" "$n_to" "$rate" "$max_l" "$avg_l"
 done < "$SUMMARY_FILE"
 
-echo -e "${C}└──────────────┴──────┴────────────┴────────────┴────────────┴─────────┘${NC}"
+echo -e "${C}└────────────┴─────┴──────┴──────┴─────┴────────┴──────────┴──────────┘${NC}"
 
-# --- VERDICT ---
 if [ "$GLOBAL_PASS" = true ]; then
-    echo -e "\n${G}>>>> FINAL VERDICT: SUCCESS (100% Correctness)${NC} 🎉"
+    echo -e "\n${G}>>>> FINAL VERDICT: PASS${NC} 🎉"
 else
-    echo -e "\n${R}>>>> FINAL VERDICT: FAIL (Issues detected in sorting logic)${NC} ❌"
+    echo -e "\n${R}>>>> FINAL VERDICT: FAIL${NC} ❌"
 fi
+
+if [ "$SAVE_LOG" = true ]; then echo -e "${Y}Critical failures logged to: ${NC}$LOG_FILE"; fi
 
 rm -f "$SUMMARY_FILE"
