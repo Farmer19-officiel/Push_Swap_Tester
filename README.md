@@ -28,6 +28,7 @@ Give execution permissions and run the benchmark:
 chmod +x benchmark.sh
 ./benchmark.sh
 ```
+
 Or :
 ```bash
 chmod +x benchmark.sh
