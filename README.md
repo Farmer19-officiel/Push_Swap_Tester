@@ -28,6 +28,12 @@ Give execution permissions and run the benchmark:
 chmod +x benchmark.sh
 ./benchmark.sh
 ```
+Or :
+```bash
+chmod +x benchmark.sh
+./benchmark.sh -save
+```
+If you wish to record the cases that are KO (KO, timeout, too many ops)...
 
 ---
 
